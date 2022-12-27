@@ -8,6 +8,7 @@
 import UIKit
 import RxSwift
 import RxCocoa
+import RxRelay
 
 class ViewController: UIViewController {
     
@@ -207,6 +208,77 @@ class ViewController: UIViewController {
             print($0) // next(Issue 5)
                               // next(Issue 6)
         }
+        
+        /*
+         Variable (Deprecated)
+             - BehaviorSubject를 래핑하고 값을 직선형으로 저장함
+             - value 속성을 사용하여 값에 접근할 수 있음
+             - 이제는 사용하지 않기 때문에 BehaviorRelay로 대체하길 권장됨
+         */
+        // String 타입의 이벤트를 받는 Variable
+        /*
+        let variable = Variable("Initial Value")
+        variable.value = "Hello World"
+        variable.asObservable() // Observable로 변환
+                .subscribe {
+                    print($0) // next(Hello World)
+        }
+
+        // [String] 타입의 이벤트를 받는 Variable
+        let variable1 = Variable([String]())
+
+        variable1.value.append("item 1")
+        variable1.asObservable()
+                .subscribe {
+                    print($0) // next(["item 1"])
+        }
+        // 배열 값에 변화가 있으면 구독이 만료되고 새로고침 됨으로써 동작함
+        variable1.value.append("item 2") // next(["item 1", "Item 2"])
+         */
+        
+        /*
+         < BehaviorRelay >
+         - Variable을 대체할 수 있는 방법
+         - RxSwift가 아닌 RxRelay(RxCocoa 내에 포함됨) 프레임워크에 포함되어 있음
+         - relay 클래스는 종료 이벤트(completed 또는 error)가 발생하지 않기 때문에 구독이 취소될 일이 없다
+           → UI 이벤트에 사용하기 적절하다!
+         */
+        
+        
+        // String 타입의 이벤트를 받는 BehaviorRelay
+        let relay = BehaviorRelay(value: "Initial Value")
+        relay.asObservable() // Observable로 변환
+                .subscribe {
+                    print($0) // next(Initial Value)
+        }
+        //relay.value = "Hello World" // 오류 발생, value는 immutable 하기 때문
+        relay.accept("Hello World") // next(Hello World)
+
+        // [String] 타입의 이벤트를 받는 BehaviorRelay
+        let relayT = BehaviorRelay(value: [String]())
+        //relay.value.append("Item 1") // 오류 발생, value는 immutable
+        // BehaviorRelay 에 값을 새로 추가하는 방법 (기존 값은 사라짐)
+        relayT.accept(["Item 1"])
+        relayT.asObservable()
+                .subscribe {
+                    print($0) // next(["Item 1"])
+        }
+
+        // 기존 값을 유지하면서 값을 새로 추가하는 방법 1 - 수식으로 추가
+        relayT.accept(relayT.value + ["Item 2"])
+        relayT.asObservable()
+                .subscribe {
+                    print($0.element) // next(["Item 1", "Item 2"])
+        }
+
+        // 기존 값을 유지하면서 값을 새로 추가하는 방법 2 - 변수를 만들어서 추가
+        var value = relayT.value
+        value.append("Item 3")
+        value.append("Item 4")
+        relayT.accept(value)
+        relayT.asObservable()
+                .subscribe {
+                    print($0) // next(["Item 1", "Item 2", "Item 3", "Item 4"])
+        }
     }
 }
-
