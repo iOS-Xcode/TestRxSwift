@@ -473,5 +473,85 @@ class ViewController: UIViewController {
 //        timer2 next(3)
 //        timer2 next(4)
 //        timer2 completed
+        
+        /*
+         < Transforming Observables Operator 란? >
+         Transforming Observables Operator는 Observable에서 방출한 항목을 변환시키는 메서드를 말해요.
+         Observables에서 방출하는 값들에 일정한 변화를 적용할 수도 있고
+         조건을 기준으로 요소들을 병합하는 등의 연산을 수행할 수 있습니다.
+         Operator는 Observable을 전달받아 Observable을 반환하는 경우가 대부분이라고 앞서 언급한 적이 있는데요.
+         그래서 Transforming Observables Operator는 다음 연산을 위해 값을 변환하는데 사용한다고 볼 수 있어요!
+         */
+        
+        /*
+         1. Map (docs)
+             - Observable에서 방출한 각각의 값들에 특정 함수 연산을 수행시킨 시퀀스를 결과로 반환하는​ 메서드
+             - Swift의 map 메서드와 동작이 유사함
+         */
+        
+        Observable.of(1, 2, 3)
+            .map { $0 * 10 }  // 각 항목에 10을 곱하는 연산
+            .subscribe { print("map",$0) }
+            .disposed(by: disposeBag)
+        // 10
+        // 20
+        // 30
+        // completed
+        
+        /*
+         2. FlatMap (docs)
+             - Observable에서 방출한 값들에 특정한 연산을 수행시킨 후 하나의 새로운 시퀀스로 병합한 결과를 반환하는 메서드
+             - Swift의 flatMap과 동작이 유사함
+             - 순서를 보장하지 않음
+         */
+        let sequence1  = Observable<Int>.of(1, 2)
+        let sequence2  = Observable<Int>.of(3, 4, 5)
+        Observable.of(sequence1, sequence2)
+            .flatMap{ $0 }  // 각 항목을 그대로 반환하는 연산
+            .subscribe { print("flatMap",$0) }
+            .disposed(by: disposeBag)
+        
+        /*
+         3. GroupBy (docs)
+             - Observable에서 방출한 값들을 Key 값에 따라 평가하고 Key 값을 기준으로 나눠서 각각의 시퀀스를 결과로 반환하는 메서드
+             - 분류한 이벤트들의 Key 값과 Observable에서 방출한 본래의 값을 함께 가지는 Observable을 반환함
+         */
+        
+        Observable.of(1, 2, 3, 4, 5)
+            .groupBy { $0 % 2 == 0 }  // --> 짝수/홀수를 구분하는 연산
+            .flatMap { $0.toArray() }  // --> 결과 그룹을 array 로 표현하기 위한 Operator
+            .subscribe { print("GroupBy",$0) }
+            .disposed(by: disposeBag)
+        // next([1, 3, 5])
+        // next([2, 4])
+        // completed
+        
+        /*
+         4. Buffer (docs)
+             - Observable에서 방출한 값들을 주기적으로 일정 개수만큼 모아서 묶음(배열)으로 만든 시퀀스를 결과로 반환하는 메서드
+             - 특정 주기 내에 일정 개수만큼의 값이 모인다면 주기를 기다리지 않고 바로 값을 방출함
+             - 버퍼 내에 값을 모으던 중 에러가 발생하면 해당 버퍼의 값은 버리고 에러 이벤트를 방출함
+         */
+        Observable<Int>.interval(
+            RxTimeInterval.seconds(1),  // --> 1초마다 0에서부터 1씩 증가하는 정수 생성
+            scheduler: MainScheduler.instance
+        )
+        .map { $0 }
+        .buffer(
+            timeSpan: RxTimeInterval.seconds(5),  // --> 5초를 주기로 기다리면서 값을 모음
+            count: 3,  // --> 최대 3개의 값을 묶음
+            scheduler: MainScheduler.instance
+        )
+
+        .subscribe {
+            print("Buffer", $0)
+        }
+        //.disposed(by: disposeBag)
+        /*
+        Buffer next([0, 1, 2])
+        Buffer next([3, 4, 5])
+        Buffer next([6, 7, 8])
+        Buffer next([9, 10, 11])
+         */
     }
 }
