@@ -4,6 +4,7 @@
 //
 //  Created by SHKIM4 on 2022/12/27.
 //
+//https://blog.naver.com/yb2316/222284011277
 
 import UIKit
 import RxSwift
@@ -546,12 +547,330 @@ class ViewController: UIViewController {
         .subscribe {
             print("Buffer", $0)
         }
-        //.disposed(by: disposeBag)
+        .disposed(by: disposeBag)
         /*
         Buffer next([0, 1, 2])
         Buffer next([3, 4, 5])
         Buffer next([6, 7, 8])
         Buffer next([9, 10, 11])
          */
+        
+        /*
+         < Filtering Observables Operators 란? >
+         Filtering Observables Operators는 Observable에서 방출되는 요소들을 선택적으로 내보낼 수 있는 연산자를 말해요.
+         일정 시간 동안 여러 개의 이벤트가 들어왔을 때 하나만 선택해서 내보내거나
+         앞에서부터 몇 개를 고르거나
+         서로 다른 이벤트만 고르는 등
+         조건에 따라 Observable의 시퀀스를 다룰 수 있어요!
+         */
+        /*
+         1-1. Debounce (docs)
+             - 마지막 이벤트를 기준으로 일정 시간(dueTime)이 지나면 마지막 이벤트를 방출하는 메서드
+             - 일정 시간 동안 들어온 이벤트는 무시됨
+             - 주로 텍스트 필드 입력 중에 사용
+         */
+        let numbers = Array(stride(from: 1, through: 10, by: 1))
+        // 1초마다 1~10의 숫자를 방출하는 Observable
+        let intervalObservable = Observable<Int>.create { observer in
+            numbers.forEach { number in
+                DispatchQueue.global().asyncAfter(
+                    deadline: DispatchTime.now() + Double(number)
+                ) {
+                    print("emit \(number)")
+                    observer.onNext(number)
+                    if numbers.last == number {
+                        observer.onCompleted()
+                    }
+                }
+            }
+            return Disposables.create()
+        }
+
+        intervalObservable
+        .debounce(
+            // 2.5초를 간격으로 디바운싱
+            RxTimeInterval.milliseconds(2500),
+            scheduler: MainScheduler.instance
+        )
+        .subscribe {
+            print("intervalObservable",$0)
+        }
+        .disposed(by: disposeBag)
+        // emit 1
+        // emit 2
+        // ...
+        // emit 10
+        // next(10) --> 2.5초가 지나기 전에 새 이벤트가 들어오므로 마지막 이벤트만 방출됨
+        // completed
+        /*
+         1-2. Throttle (docs)
+             - 최초 방출된 이벤트로부터 일정 시간(dueTime) 동안 이벤트를 무시하는 메서드
+             - latest 설정에 따라 dueTime 중 발생한 이벤트를 방출하거나(true) 하지 않을 수 있음(false)
+             - 주로 버튼 이벤트 중복 호출 방지에 사용
+         */
+        let throttleNumbers = Array(stride(from: 1, through: 10, by: 1))
+        // 1초마다 1~10의 숫자를 방출하는 Observable
+        let intervalTObservable = Observable<Int>.create { observer in
+            throttleNumbers.forEach { number in
+                DispatchQueue.global().asyncAfter(
+                    deadline: DispatchTime.now() + Double(number)
+                ) {
+                    print("ThrottleEmit \(number)")
+                    observer.onNext(number)
+                    if numbers.last == number {
+                        observer.onCompleted()
+                    }
+                }
+            }
+            return Disposables.create()
+        }
+
+        intervalTObservable
+        .throttle(
+            RxTimeInterval.milliseconds(2500),
+            latest: true,
+            scheduler: MainScheduler.instance
+        )
+        .subscribe {
+            print("Throttle",$0)
+        }
+//        ThrottleEmit 1
+//        Throttle next(1)
+//        ThrottleEmit 2
+//        ThrottleEmit 3
+//        Throttle next(3)
+//        ThrottleEmit 4
+//        ThrottleEmit 5
+//        ThrottleEmit 6
+//        Throttle next(6)
+//        ThrottleEmit 7
+//        ThrottleEmit 8
+//        Throttle next(8)
+//        ThrottleEmit 9
+//        ThrottleEmit 10
+//        Throttle next(10)
+//        Throttle completed
+        .disposed(by: disposeBag)
+        
+        intervalObservable
+        .throttle(
+            RxTimeInterval.milliseconds(2500),
+            latest: false,  // --> latest가 false일 경우 dueTime 내의 이벤트 방출하지 않음
+            scheduler: MainScheduler.instance
+        )
+        .subscribe {
+            print("falseThrottle",$0)
+        }
+        //.disposed(by: disposeBag)
+//        falseThrottle next(1)
+//        falseThrottle next(4)
+//        falseThrottle next(7)
+//        falseThrottle next(10)
+//        falseThrottle completed
+        
+        /*
+         2. Distinct (docs)
+             - 중복 방출되는 이벤트에 대해 하나의 이벤트만 방출시켜주는 메서드
+             - 일부 구현 중에는 연속으로 중복되는 이벤트만 걸러주기도 함 (RxSwift의 경우)
+         */
+        Observable<Int>.of(1, 2, 3, 3, 2, 3)
+            .distinctUntilChanged()
+            .subscribe {
+                print("Distinct",$0)
+            }
+        //    .disposed(by: disposeBag)
+        // next(1)
+        // next(2)
+        // next(3) --> 연속되는 중복 항목 제거
+        // next(2)
+        // next(3) --> 연속되지 않는 중복 항목이므로 이벤트 방출
+        // completed
+        
+        /*
+         3. ElementAt (docs)
+             - Observable 내의 이벤트 중 n번째 이벤트만 방출하는 메서드
+             - 0에서부터 이벤트 개수를 셈
+         */
+        Observable<Int>.of(1, 2, 3, 4, 5)
+            .element(at: 3)
+            .subscribe {
+                print("ElementAt",$0)
+            }
+            .disposed(by: disposeBag)
+//        ElementAt next(4)
+//        ElementAt completed
+        
+        /*
+         4. Filter (docs)
+             - 조건에 맞는 이벤트만 방출하는 메서드
+             - 조건은 반드시 Bool 결과를 반환해야 함
+         */
+        Observable<Int>.of(1, 2, 3, 4, 5)
+            .filter {
+                $0 < 3
+            }
+            .subscribe {
+                print("filter",$0)
+            }
+            .disposed(by: disposeBag)
+        // next(1)
+        // next(2)
+        // completed
+        
+        /*
+         5. First (docs)
+             - Observable이 방출한 첫 번째 항목 또는 조건에 맞는 첫 번째 항목을 방출하는 메서드
+             - 일부 구현 중에는 Observable을 반환하도록 구현되어 있지 않기 때문에 Take 연산자를 쓰거나 ElementAt 연산자를 쓰면 원하는 결과를 얻을 수 있음 (RxSwift의 경우)
+         */
+        Observable<Int>.of(1, 2, 3, 4, 5)
+            .first()
+            .subscribe {
+                print("First",$0)
+            }
+            .disposed(by: disposeBag)
+        // success(Optional(1)) --> 결과 값이 다르다, Single 타입을 반환하기 때문
+        
+        /*
+         6. IgnoreElements (docs)
+             - Observable에서 항목을 방출하지 않고 바로 종료 이벤트를 보내는 메서드
+         */
+        Observable<Int>.of(1, 2, 3, 4, 5)
+            .ignoreElements()
+            .subscribe {
+                print("IgnoreElements",$0)
+            }
+            .disposed(by: disposeBag)
+        // completed
+        
+        /*
+         7. Sample (docs)
+             - 매개변수로 받은 Observable(source)이 트리거될 때 마다 자신(data)의 최신 이벤트를 방출하는 메서드
+             - data observable이 완료되면 source observable이 트리거 될 때 완료 이벤트를 전달함
+         */
+        let source = PublishSubject<Void?>()
+        let data = PublishSubject<Int>()
+        data.sample(source)
+            .subscribe {
+                print("Sample",$0)
+            }
+            .disposed(by: disposeBag)
+        data.onNext(1)
+        data.onNext(2)
+        source.onNext(())  // next(2)
+        source.onNext(())  // 무시
+        data.onNext(3)
+        source.onNext(nil)  // next(3) --> source의 값은 무엇이든 상관 없음
+        source.onNext(nil)  // 무시
+        data.onCompleted()
+        source.onNext(())  // completed
+        
+        /*
+         8. Skip (docs)
+             - Observable에서 방출되는 n개의 이벤트를 무시하는(스킵하는) 메서드
+             - 스킵한 이벤트 이후의 이벤트는 정상적으로 방출됨
+             - take 메서드와 반대되는 동작
+         */
+        Observable<Int>.of(1, 2, 3, 4, 5)
+            .skip(3)
+            .subscribe {
+                print("Skip",$0)
+            }
+            .disposed(by: disposeBag)
+        // next(4)
+        // next(5)
+        // completed
+        
+        /*
+         8-1. SkipWhile (docs)
+             - Observable에서 방출되는 항목이 조건에 해당하는 동안 이벤트를 방출하지 않는 메서드
+             - 조건이 false를 반환하면 이후 이벤트는 모두 방출
+         */
+        Observable<Int>.of(1, 2, 3, 4, 5)
+            .skip(while: {
+                $0 < 3
+            })
+            .subscribe {
+                print("SkipWhile",$0)
+            }
+            .disposed(by: disposeBag)
+        // next(3)
+        // next(4)
+        // next(5)
+        // completed
+        
+        /*
+         - 매개변수로 받은 Observable(trigger)이 이벤트를 방출한 이후로 자신(data)의 이벤트를 모두 방출하는 메서드
+         - trigger observable이 한 번 이벤트를 방출한 후에는 다른 이벤트를 방출해도 data의 이벤트 방출에는 영향이 없음
+         */
+        
+        let trigger = PublishSubject<String>()
+        let triggerData = PublishSubject<Int>()
+        triggerData.skip(until: trigger)
+            .subscribe {
+                print($0)
+            }
+            .disposed(by: disposeBag)
+        triggerData.onNext(1)  // 무시
+        triggerData.onNext(2)  // 무시
+        trigger.onNext("A")  // --> trigger의 값이 방출된 이후로 모든 이벤트를 방출
+        triggerData.onNext(3)  // next(3)
+        trigger.onNext("B")  // --> 이후 이벤트는 상관 X
+        triggerData.onNext(4)  // next(4)
+        triggerData.onCompleted()  // completed
+        
+        /*
+         9. Take (docs)
+             - Observable에서 방출되는 n개의 이벤트만 방출하는 메서드
+             - n개째의 이벤트를 방출하면서 종료 이벤트를 함께 보냄
+             - skip 메서드와 반대되는 동작
+         */
+        Observable<Int>.of(1, 2, 3, 4, 5)
+            .take(3)
+            .subscribe {
+                print("Take",$0)
+            }
+            .disposed(by: disposeBag)
+        // next(1)
+        // next(2)
+        // next(3)
+        // completed
+        
+        /*
+         9-1. TakeWhile (docs)
+             - Observable에서 방출되는 항목이 조건에 해당하지 않을 때까지 이벤트를 방출하는 메서드
+             - 조건이 만족하지 않을 때 종료 이벤트를 보냄
+         */
+        Observable<Int>.of(1, 2, 3, 4, 5)
+            .take(while: {
+                $0 < 3
+            })
+            .subscribe {
+                print("TakeWhile",$0)
+            }
+            .disposed(by: disposeBag)
+
+        // next(1)
+        // next(2)
+        // completed
+        
+        /*
+         9-2. TakeUntil (docs)
+             - 매개변수로 받은 Observable(trigger)이 이벤트를 방출할 때까지 자신(data)의 이벤트를 모두 방출하는 메서드
+             - trigger observable이 이벤트를 방출한 후 종료 이벤트를 함께 보냄
+         */
+        let triggerPublish = PublishSubject<String>()
+        let dataPublish = PublishSubject<Int>()
+        dataPublish.take(until: trigger)
+            .subscribe {
+                print("TakeUntil",$0)
+            }
+            .disposed(by: disposeBag)
+        dataPublish.onNext(1)  // next(1)
+        dataPublish.onNext(2)  // next(2)
+        triggerPublish.onNext("A")  // completed
+        dataPublish.onNext(3)  // 무시
+        triggerPublish.onNext("B")  // --> 이후 이벤트는 상관 X
+        dataPublish.onNext(4)  // 무시
+        dataPublish.onCompleted()  // 무시
     }
 }
